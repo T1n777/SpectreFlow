@@ -6,7 +6,7 @@ def extract_cfg(binary_path: str):
     r2 = r2pipe.open(binary_path)
     r2.cmd("aaa")
     functions = r2.cmdj("aflj")
-
+# runs aaa to analyse everything followed by listing all functions
     main_addr = None
     for f in functions:
         if f["name"] == "main":
@@ -17,7 +17,7 @@ def extract_cfg(binary_path: str):
 
     cfg = r2.cmdj(f"agfj @ {main_addr}")
     r2.quit()
-
+# make the cfg - control flow graph
     nodes, edges = [], []
     if cfg:
         blocks = cfg[0].get("blocks", [])
@@ -27,10 +27,10 @@ def extract_cfg(binary_path: str):
                 edges.append((block["offset"], block["jump"]))
             if "fail" in block:
                 edges.append((block["offset"], block["fail"]))
-
+# get all blocks from cfg, find all nodes(the simple blocks) and edges(the jumps and fails b/w blocks)
     return {"nodes": nodes, "edges": edges}
 
-
+#providing additional data required for risk engine
 def compute_static_metrics(cfg):
     nodes = cfg["nodes"]
     edges = cfg["edges"]
