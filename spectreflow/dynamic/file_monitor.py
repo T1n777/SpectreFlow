@@ -18,17 +18,20 @@ logger = logging.getLogger("spectreflow.dynamic.file")
 class _EventHandler(FileSystemEventHandler):
     """Collect file-system events into a shared list."""
 
-    def __init__(self, events: list[str]):
+    def __init__(self, events: list[dict]):
         super().__init__()
         self._events = events
+        self._seen: set[tuple] = set()
 
     # helpers ──────────────────────────────────────────────────────────
     def _record(self, action: str, path: str):
         basename = os.path.basename(path)
-        entry = f"{action} {basename}"
-        if entry not in self._events:
+        key = (action, basename)
+        if key not in self._seen:
+            self._seen.add(key)
+            entry = {"action": action, "file": basename}
             self._events.append(entry)
-            logger.info("File event: %s", entry)
+            logger.info("File event: %s %s", action, basename)
 
     # watchdog callbacks ──────────────────────────────────────────────
     def on_created(self, event: FileSystemEvent):
@@ -51,7 +54,7 @@ class FileMonitor:
     """Watch configured directories for file activity."""
 
     def __init__(self):
-        self.events: list[str] = []
+        self.events: list[dict] = []
         self._observer = Observer()
         self._handler = _EventHandler(self.events)
 
@@ -74,15 +77,13 @@ class FileMonitor:
         flagged = []
 
         # Check for suspicious file extensions
-        for event_str in self.events:
-            parts = event_str.split(" ", 1)
-            if len(parts) == 2:
-                filename = parts[1]
-                _, ext = os.path.splitext(filename)
-                if ext.lower() in config.SUSPICIOUS_EXTENSIONS:
-                    if "file_write" not in flagged:
-                        flagged.append("file_write")
-                    break
+        for event in self.events:
+            filename = event["file"]
+            _, ext = os.path.splitext(filename)
+            if ext.lower() in config.SUSPICIOUS_EXTENSIONS:
+                if "file_write" not in flagged:
+                    flagged.append("file_write")
+                break
 
         # Any file activity at all is still worth recording,
         # but only flag if extensions are suspicious.
