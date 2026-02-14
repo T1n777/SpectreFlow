@@ -8,7 +8,7 @@ import json
 import logging
 import sys
 
-from spectreflow.dynamic import DynamicAnalyzer
+from analyzer import DynamicAnalyzer
 
 
 def main():

@@ -11,10 +11,10 @@ import time
 import threading
 import logging
 
-from .process_monitor import ProcessMonitor
-from .network_monitor import NetworkMonitor
-from .file_monitor import FileMonitor
-from . import config
+from process_monitor import ProcessMonitor, measure_baseline
+from network_monitor import NetworkMonitor
+from file_monitor import FileMonitor
+import config
 
 logger = logging.getLogger("spectreflow.dynamic.analyzer")
 
@@ -64,11 +64,15 @@ class DynamicAnalyzer:
         logger.info("Duration: %ss", self.duration)
         logger.info("=" * 60)
 
-        # 1. Start file-system monitor BEFORE launching the target
+        # 1. Measure CPU baseline BEFORE doing anything else.
+        #    This learns the current system load (e.g. a game running).
+        baseline_cpu = measure_baseline()
+
+        # 2. Start file-system monitor BEFORE launching the target
         file_mon = FileMonitor()
         file_mon.start()
 
-        # 2. Launch the target process
+        # 3. Launch the target process
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -83,8 +87,8 @@ class DynamicAnalyzer:
 
         pid = proc.pid
 
-        # 3. Start process & network monitors in threads
-        proc_mon = ProcessMonitor(pid)
+        # 4. Start process & network monitors in threads
+        proc_mon = ProcessMonitor(pid, baseline_cpu=baseline_cpu)
         net_mon = NetworkMonitor(pid)
 
         threads = [
@@ -98,11 +102,11 @@ class DynamicAnalyzer:
         for t in threads:
             t.start()
 
-        # 4. Wait for monitoring duration
+        # 5. Wait for monitoring duration
         logger.info("Monitoring for %s seconds ...", self.duration)
         time.sleep(self.duration)
 
-        # 5. Tear down
+        # 6. Tear down
         proc_mon.stop()
         net_mon.stop()
         file_mon.stop()
@@ -117,7 +121,7 @@ class DynamicAnalyzer:
         except Exception:
             pass
 
-        # 6. Aggregate results
+        # 7. Aggregate results
         return self._aggregate(proc_mon, net_mon, file_mon)
 
     # ── internals ────────────────────────────────────────────────────

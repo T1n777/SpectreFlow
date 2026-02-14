@@ -10,7 +10,7 @@ import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-from . import config
+import config
 
 logger = logging.getLogger("spectreflow.dynamic.file")
 

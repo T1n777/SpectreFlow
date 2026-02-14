@@ -15,9 +15,25 @@ MONITOR_DURATION = 30
 POLL_INTERVAL = 0.5
 
 
-# ── CPU Spike Detection ─────────────────────────────────────────────
-# CPU usage percentage above which a "spike" is flagged.
-CPU_SPIKE_THRESHOLD = 80.0
+# ── CPU Spike Detection (Adaptive Baseline) ─────────────────────────
+# How many seconds to sample system CPU *before* launching the target,
+# in order to learn the current baseline (e.g. a game already running).
+CPU_BASELINE_WINDOW = 3
+
+# Number of samples taken during the baseline window.
+CPU_BASELINE_SAMPLES = 6
+
+# A spike is flagged when system CPU rises more than this many
+# percentage-points ABOVE the measured baseline.
+# Example: baseline = 65% (game running) → spike threshold = 65 + 15 = 80%.
+#          baseline = 10% (idle)         → spike threshold = 10 + 15 = 25%.
+CPU_SPIKE_DELTA = 15.0
+
+# Hard upper-limit: if the target *process alone* uses more than this
+# percentage on any single core, it is flagged regardless of baseline.
+# (Catches crypto-miners pinning a core even when system average is low.)
+CPU_PROCESS_HARD_LIMIT = 70.0
+
 
 
 # ── File System Monitoring ───────────────────────────────────────────

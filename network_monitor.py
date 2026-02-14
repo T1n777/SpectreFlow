@@ -9,7 +9,7 @@ import logging
 
 import psutil
 
-from . import config
+import config
 
 logger = logging.getLogger("spectreflow.dynamic.network")
 
