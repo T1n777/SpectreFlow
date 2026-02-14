@@ -53,16 +53,16 @@ def extract_cfg(binary_path):
         if addr is None:
             continue
 
-        nodes.append(addr)
+        nodes.append(hex(addr))
 
         jump = block.get("jump")
         fail = block.get("fail")
 
         if jump is not None:
-            edges.append((addr, jump))
+            edges.append((hex(addr), hex(jump)))
 
         if fail is not None:
-            edges.append((addr, fail))
+            edges.append((hex(addr), hex(fail)))
     return {
         "nodes": nodes, 
         "edges": edges
