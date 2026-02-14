@@ -1,14 +1,7 @@
-try:
-    import r2pipe
-    _HAS_R2PIPE = True
-except ImportError:
-    _HAS_R2PIPE = False
+import r2pipe
 
 
 def extract_cfg(binary_path: str):
-    if not _HAS_R2PIPE:
-        print("[!] r2pipe not installed — skipping static analysis.")
-        return {"nodes": [], "edges": []}
 
     r2 = r2pipe.open(binary_path)
     r2.cmd("aaa")
