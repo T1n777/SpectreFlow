@@ -1,40 +1,29 @@
-"""
-SpectreFlow Dynamic Analysis — Network Monitor
-Polls network connections made by the target process and records remote endpoints.
-"""
-
 import time
 import threading
 import logging
 
 import psutil
-
 import config
 
 logger = logging.getLogger("spectreflow.dynamic.network")
 
 
 class NetworkMonitor:
-    """Monitor outgoing / listening network connections for a given PID."""
-
     def __init__(self, pid: int):
         self.pid = pid
-        self.connections: list[str] = []          # "ip:port" strings
+        self.connections: list[str] = []
         self._seen: set[tuple] = set()
         self._stop_event = threading.Event()
 
-    # ── public API ───────────────────────────────────────────────────
     def start(self, duration: float | None = None):
         duration = duration or config.MONITOR_DURATION
         deadline = time.time() + duration
 
-        # Create the Process handle ONCE — avoids a kernel lookup every iteration
         try:
             proc = psutil.Process(self.pid)
         except psutil.NoSuchProcess:
             return
 
-        # Cache references to avoid repeated attribute lookups in the hot loop
         seen_add = self._seen.add
         seen = self._seen
         connections_append = self.connections.append
@@ -43,8 +32,6 @@ class NetworkMonitor:
 
         while not stop_is_set() and time.time() < deadline:
             try:
-                # Scan parent + all child processes (PyInstaller .exe
-                # files spawn a child that holds the actual sockets)
                 procs_to_scan = [proc] + proc.children(recursive=True)
                 for p in procs_to_scan:
                     try:
@@ -69,7 +56,6 @@ class NetworkMonitor:
     def stop(self):
         self._stop_event.set()
 
-    # ── results ──────────────────────────────────────────────────────
     def get_results(self) -> dict:
         return {
             "network_activity": self.connections,
