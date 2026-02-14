@@ -7,6 +7,7 @@ The adaptive approach lets the analyzer work even when a game or other
 CPU-heavy application is already running.
 """
 
+import os
 import time
 import threading
 import logging
@@ -70,6 +71,7 @@ class ProcessMonitor:
         self.children_spawned: list[str] = []
         self._children_seen: set[str] = set()  # O(1) dedup for child names
         self._stop_event = threading.Event()
+        self.target_location: str | None = None  # discovered at runtime
 
         logger.info(
             "Adaptive threshold: %.1f%% (baseline %.1f%% + delta %.1f%%)",
@@ -88,6 +90,9 @@ class ProcessMonitor:
             proc = psutil.Process(self.pid)
             # Prime cpu_percent (first call always returns 0)
             proc.cpu_percent(interval=None)
+
+            # ── Discover where the target file lives on disk ─────
+            self._discover_location(proc)
         except psutil.NoSuchProcess:
             logger.warning("PID %d does not exist.", self.pid)
             return
@@ -144,6 +149,33 @@ class ProcessMonitor:
     def stop(self):
         self._stop_event.set()
 
+    # ── location discovery ───────────────────────────────────────────
+    def _discover_location(self, proc: psutil.Process):
+        """Resolve the actual file path of the target from the running process.
+
+        For Python scripts: extracts the .py path from the command line.
+        For binaries:       uses the executable path directly.
+        """
+        try:
+            cmdline = proc.cmdline()
+            exe_path = proc.exe()
+
+            # If launched as 'python script.py', the script is in cmdline[1+]
+            for arg in cmdline[1:]:
+                if arg.endswith(('.py', '.pyw')):
+                    resolved = os.path.abspath(arg)
+                    if os.path.isfile(resolved):
+                        self.target_location = resolved
+                        logger.info("Target location: %s", resolved)
+                        return
+
+            # Binary — the exe itself is the malware
+            if exe_path and os.path.isfile(exe_path):
+                self.target_location = os.path.abspath(exe_path)
+                logger.info("Target location: %s", self.target_location)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
     # ── results ──────────────────────────────────────────────────────
     def get_results(self) -> dict:
         return {
@@ -153,5 +185,6 @@ class ProcessMonitor:
             "max_system_cpu_percent": round(self.max_cpu, 1),
             "max_process_cpu_percent": round(self.max_process_cpu, 1),
             "children_spawned": self.children_spawned,
+            "target_location": self.target_location,
             "flagged_functions": ["process_spawn"] if self.children_spawned else [],
         }

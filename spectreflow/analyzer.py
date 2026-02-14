@@ -144,15 +144,17 @@ class DynamicAnalyzer:
                     seen.add(fn)
                     all_flagged.append(fn)
 
+        # Suspicious = actual malicious indicators, NOT raw file activity.
+        # Background OS .tmp files are recorded but don't trigger the flag.
         suspicious = bool(
             proc_res["cpu_spike"]
             or net_res["network_activity"]
-            or file_res["file_activity"]
             or all_flagged
         )
 
         return {
             "suspicious": suspicious,
+            "target_location": proc_res.get("target_location"),
             "network_activity": net_res["network_activity"],
             "file_activity": file_res["file_activity"],
             "cpu_spike": proc_res["cpu_spike"],
@@ -163,8 +165,10 @@ class DynamicAnalyzer:
     def _empty_result() -> dict:
         return {
             "suspicious": False,
+            "target_location": None,
             "network_activity": [],
             "file_activity": [],
             "cpu_spike": False,
             "flagged_functions": [],
         }
+

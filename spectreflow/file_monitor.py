@@ -83,9 +83,13 @@ class FileMonitor:
 
     # ── results ──────────────────────────────────────────────────────
     def get_results(self) -> dict:
-        # Suspicious-extension check was done incrementally in _record(),
-        # so no need to re-scan the entire events list here.
+        # Only flag "file_write" when a SUSPICIOUS extension was detected.
+        # Regular .tmp / .log files from background OS processes are recorded
+        # but do NOT contribute to the suspicious verdict — this prevents
+        # false positives on idle systems.
+        flagged = ["file_write"] if self._handler.has_suspicious_ext else []
+
         return {
             "file_activity": self.events,
-            "flagged_functions": ["file_write"] if self.events else [],
+            "flagged_functions": flagged,
         }
