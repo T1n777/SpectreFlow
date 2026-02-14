@@ -14,6 +14,9 @@ import config
 
 logger = logging.getLogger("spectreflow.dynamic.file")
 
+# Pre-compute for fast lookup in event callbacks
+_SUSPICIOUS_EXTENSIONS = config.SUSPICIOUS_EXTENSIONS
+
 
 class _EventHandler(FileSystemEventHandler):
     """Collect file-system events into a shared list."""
@@ -22,6 +25,7 @@ class _EventHandler(FileSystemEventHandler):
         super().__init__()
         self._events = events
         self._seen: set[tuple] = set()
+        self.has_suspicious_ext = False  # Track at record time, not at results time
 
     # helpers ──────────────────────────────────────────────────────────
     def _record(self, action: str, path: str):
@@ -29,9 +33,14 @@ class _EventHandler(FileSystemEventHandler):
         key = (action, basename)
         if key not in self._seen:
             self._seen.add(key)
-            entry = {"action": action, "file": basename}
-            self._events.append(entry)
+            self._events.append({"action": action, "file": basename})
             logger.info("File event: %s %s", action, basename)
+
+            # Check extension once at recording time instead of re-scanning later
+            if not self.has_suspicious_ext:
+                _, ext = os.path.splitext(basename)
+                if ext.lower() in _SUSPICIOUS_EXTENSIONS:
+                    self.has_suspicious_ext = True
 
     # watchdog callbacks ──────────────────────────────────────────────
     def on_created(self, event: FileSystemEvent):
@@ -74,23 +83,9 @@ class FileMonitor:
 
     # ── results ──────────────────────────────────────────────────────
     def get_results(self) -> dict:
-        flagged = []
-
-        # Check for suspicious file extensions
-        for event in self.events:
-            filename = event["file"]
-            _, ext = os.path.splitext(filename)
-            if ext.lower() in config.SUSPICIOUS_EXTENSIONS:
-                if "file_write" not in flagged:
-                    flagged.append("file_write")
-                break
-
-        # Any file activity at all is still worth recording,
-        # but only flag if extensions are suspicious.
-        if self.events and not flagged:
-            flagged.append("file_write")
-
+        # Suspicious-extension check was done incrementally in _record(),
+        # so no need to re-scan the entire events list here.
         return {
             "file_activity": self.events,
-            "flagged_functions": flagged,
+            "flagged_functions": ["file_write"] if self.events else [],
         }

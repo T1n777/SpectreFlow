@@ -25,21 +25,20 @@ def measure_baseline() -> float:
     This captures the "normal" CPU level BEFORE the target is launched,
     so we can detect only the ADDITIONAL load the target creates.
     """
-    samples = []
     interval = config.CPU_BASELINE_WINDOW / config.CPU_BASELINE_SAMPLES
+    n_samples = config.CPU_BASELINE_SAMPLES
 
     logger.info(
         "Measuring CPU baseline over %ss (%d samples) ...",
         config.CPU_BASELINE_WINDOW,
-        config.CPU_BASELINE_SAMPLES,
+        n_samples,
     )
 
     # Prime the first call (always returns 0)
     psutil.cpu_percent(interval=None)
 
-    for _ in range(config.CPU_BASELINE_SAMPLES):
-        sample = psutil.cpu_percent(interval=interval)
-        samples.append(sample)
+    # Use a pre-allocated list for slightly less overhead
+    samples = [psutil.cpu_percent(interval=interval) for _ in range(n_samples)]
 
     baseline = statistics.mean(samples)
     logger.info(
@@ -69,6 +68,7 @@ class ProcessMonitor:
         self.max_cpu = 0.0            # max system CPU observed
         self.max_process_cpu = 0.0    # max target-process CPU observed
         self.children_spawned: list[str] = []
+        self._children_seen: set[str] = set()  # O(1) dedup for child names
         self._stop_event = threading.Event()
 
         logger.info(
@@ -92,10 +92,18 @@ class ProcessMonitor:
             logger.warning("PID %d does not exist.", self.pid)
             return
 
-        while not self._stop_event.is_set() and time.time() < deadline:
+        # Cache values outside the hot loop
+        poll_interval = config.POLL_INTERVAL
+        spike_threshold = self.spike_threshold
+        hard_limit = config.CPU_PROCESS_HARD_LIMIT
+        baseline = self.baseline_cpu
+        stop_is_set = self._stop_event.is_set
+        children_seen = self._children_seen
+
+        while not stop_is_set() and time.time() < deadline:
             try:
                 # ── Per-process CPU ──────────────────────────────────
-                process_cpu = proc.cpu_percent(interval=config.POLL_INTERVAL)
+                process_cpu = proc.cpu_percent(interval=poll_interval)
                 if process_cpu > self.max_process_cpu:
                     self.max_process_cpu = process_cpu
 
@@ -105,36 +113,27 @@ class ProcessMonitor:
                     self.max_cpu = system_cpu
 
                 # ── Check spike conditions ──────────────────────────
-                # Condition 1: System CPU jumped above (baseline + delta)
-                # This catches malware adding CPU load on top of a game.
-                if system_cpu >= self.spike_threshold:
-                    if not self.cpu_spike_detected:
+                if not self.cpu_spike_detected:
+                    if system_cpu >= spike_threshold:
                         logger.info(
                             "CPU SPIKE (system): %.1f%% exceeds adaptive "
                             "threshold %.1f%% (baseline was %.1f%%)",
-                            system_cpu,
-                            self.spike_threshold,
-                            self.baseline_cpu,
+                            system_cpu, spike_threshold, baseline,
                         )
-                    self.cpu_spike_detected = True
-
-                # Condition 2: Target process alone uses excessive CPU
-                # This catches a crypto-miner pinning one core even when
-                # overall system CPU looks "normal".
-                if process_cpu >= config.CPU_PROCESS_HARD_LIMIT:
-                    if not self.cpu_spike_detected:
+                        self.cpu_spike_detected = True
+                    elif process_cpu >= hard_limit:
                         logger.info(
                             "CPU SPIKE (process): target using %.1f%% "
                             "(hard limit %s%%)",
-                            process_cpu,
-                            config.CPU_PROCESS_HARD_LIMIT,
+                            process_cpu, hard_limit,
                         )
-                    self.cpu_spike_detected = True
+                        self.cpu_spike_detected = True
 
-                # Check for child processes
+                # ── Child processes (O(1) dedup via set) ─────────────
                 for child in proc.children(recursive=True):
                     name = child.name()
-                    if name not in self.children_spawned:
+                    if name not in children_seen:
+                        children_seen.add(name)
                         self.children_spawned.append(name)
                         logger.info("Child process spawned: %s", name)
 
@@ -147,9 +146,6 @@ class ProcessMonitor:
 
     # ── results ──────────────────────────────────────────────────────
     def get_results(self) -> dict:
-        flagged = []
-        if self.children_spawned:
-            flagged.append("process_spawn")
         return {
             "cpu_spike": self.cpu_spike_detected,
             "baseline_cpu_percent": round(self.baseline_cpu, 1),
@@ -157,5 +153,5 @@ class ProcessMonitor:
             "max_system_cpu_percent": round(self.max_cpu, 1),
             "max_process_cpu_percent": round(self.max_process_cpu, 1),
             "children_spawned": self.children_spawned,
-            "flagged_functions": flagged,
+            "flagged_functions": ["process_spawn"] if self.children_spawned else [],
         }

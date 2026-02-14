@@ -135,11 +135,13 @@ class DynamicAnalyzer:
         net_res = net_mon.get_results()
         file_res = file_mon.get_results()
 
-        # Merge flagged functions (deduplicated, ordered)
+        # Merge flagged functions — O(n) via set instead of O(n²) via list scan
+        seen: set[str] = set()
         all_flagged: list[str] = []
         for src in (proc_res, net_res, file_res):
             for fn in src.get("flagged_functions", []):
-                if fn not in all_flagged:
+                if fn not in seen:
+                    seen.add(fn)
                     all_flagged.append(fn)
 
         suspicious = bool(
