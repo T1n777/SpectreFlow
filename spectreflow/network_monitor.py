@@ -43,15 +43,22 @@ class NetworkMonitor:
 
         while not stop_is_set() and time.time() < deadline:
             try:
-                for conn in proc.net_connections(kind="inet"):
-                    raddr = conn.raddr
-                    if raddr:
-                        endpoint = (raddr.ip, raddr.port)
-                        if endpoint not in seen:
-                            seen_add(endpoint)
-                            entry = f"{raddr.ip}:{raddr.port}"
-                            connections_append(entry)
-                            logger.info("Network connection: %s", entry)
+                # Scan parent + all child processes (PyInstaller .exe
+                # files spawn a child that holds the actual sockets)
+                procs_to_scan = [proc] + proc.children(recursive=True)
+                for p in procs_to_scan:
+                    try:
+                        for conn in p.net_connections(kind="inet"):
+                            raddr = conn.raddr
+                            if raddr:
+                                endpoint = (raddr.ip, raddr.port)
+                                if endpoint not in seen:
+                                    seen_add(endpoint)
+                                    entry = f"{raddr.ip}:{raddr.port}"
+                                    connections_append(entry)
+                                    logger.info("Network connection: %s", entry)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 break
             except Exception as exc:
