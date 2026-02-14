@@ -8,4 +8,5 @@ build/
 venv/
 .env
 *.log
+*.spec
 output/

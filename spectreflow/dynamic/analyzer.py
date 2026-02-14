@@ -4,6 +4,7 @@ Launches the target executable, runs all monitors concurrently,
 and produces the final analysis result dictionary.
 """
 
+import os
 import subprocess
 import sys
 import time
@@ -17,10 +18,15 @@ from . import config
 
 logger = logging.getLogger("spectreflow.dynamic.analyzer")
 
+# File extensions that are treated as Python scripts (run via interpreter).
+_SCRIPT_EXTENSIONS = {".py", ".pyw"}
+
 
 class DynamicAnalyzer:
     """
     Main entry point for dynamic analysis.
+
+    Supports both Python scripts (.py) and compiled binaries (.exe, ELF, etc.).
 
     Usage:
         analyzer = DynamicAnalyzer("path/to/suspicious.exe", duration=30)
@@ -32,12 +38,29 @@ class DynamicAnalyzer:
         self.target_path = target_path
         self.duration = duration or config.MONITOR_DURATION
 
+    # ── helpers ──────────────────────────────────────────────────────
+    def _build_command(self) -> list[str]:
+        """Return the command list to launch the target.
+
+        * .py / .pyw  → run via the Python interpreter
+        * everything else (.exe, ELF, etc.) → run directly as a binary
+        """
+        _, ext = os.path.splitext(self.target_path)
+        if ext.lower() in _SCRIPT_EXTENSIONS:
+            return [sys.executable, self.target_path]
+        else:
+            return [self.target_path]
+
     # ── public API ───────────────────────────────────────────────────
     def run(self) -> dict:
         """Execute the target and monitor it. Returns the analysis dict."""
+        cmd = self._build_command()
+        is_binary = len(cmd) == 1
+
         logger.info("=" * 60)
         logger.info("SpectreFlow Dynamic Analysis")
         logger.info("Target : %s", self.target_path)
+        logger.info("Type   : %s", "binary" if is_binary else "script")
         logger.info("Duration: %ss", self.duration)
         logger.info("=" * 60)
 
@@ -48,7 +71,7 @@ class DynamicAnalyzer:
         # 2. Launch the target process
         try:
             proc = subprocess.Popen(
-                [sys.executable, self.target_path],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
