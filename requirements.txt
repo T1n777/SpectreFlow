@@ -1,2 +1,9 @@
-networkx>=3.0
-matplotlib>=3.7
+# Core dependencies
+psutil
+watchdog
+matplotlib
+networkx
+
+# Optional — only needed for static analysis (--static flag)
+# Requires radare2 installed and on PATH
+# r2pipe
