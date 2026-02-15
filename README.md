@@ -56,7 +56,7 @@ SpectreFlow is a comprehensive malware analysis tool that combines **static anal
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repo/spectreflow.git
+   git clone https://github.com/T1n777/spectreflow.git
    cd spectreflow
    ```
 
@@ -115,3 +115,4 @@ python main.py path/to/malware.exe --no-gui
 - **`report_gui.py`**: Tkinter-based dashboard for results.
 - **`graph_visualizer.py`**: Matplotlib/NetworkX graph visualization.
 - **`container.py`**: Manages Docker and local sandboxes.
+
