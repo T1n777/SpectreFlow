@@ -8,17 +8,20 @@ from analyzer import DynamicAnalyzer
 
 def main():
     parser = argparse.ArgumentParser(
-        description="SpectreFlow Dynamic Analyzer"
+        description="SpectreFlow Dynamic Analyzer (headless)"
     )
-    parser.add_argument("target", help="Path to target script / executable.")
-    parser.add_argument("--duration", type=float, default=15, help="Monitor duration (s).")
-    parser.add_argument("--output", type=str, default=None, help="Save JSON report to file.")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Debug logging.")
+    parser.add_argument("target",
+                        help="Path to target script / executable.")
+    parser.add_argument("--duration", type=float, default=15,
+                        help="Monitor duration in seconds (default: 15).")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Save JSON report to file.")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Debug logging.")
     args = parser.parse_args()
 
-    level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
-        level=level,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s │ %(name)-35s │ %(message)s",
         datefmt="%H:%M:%S",
     )

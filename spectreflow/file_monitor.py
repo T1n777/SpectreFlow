@@ -11,6 +11,7 @@ _SUSPICIOUS_EXTENSIONS = config.SUSPICIOUS_EXTENSIONS
 
 
 class _EventHandler(FileSystemEventHandler):
+
     def __init__(self, events: list[dict]):
         super().__init__()
         self._events = events
@@ -20,14 +21,16 @@ class _EventHandler(FileSystemEventHandler):
     def _record(self, action: str, path: str):
         basename = os.path.basename(path)
         key = (action, basename)
-        if key not in self._seen:
-            self._seen.add(key)
-            self._events.append({"action": action, "file": basename})
-            logger.info("File event: %s %s", action, basename)
-            if not self.has_suspicious_ext:
-                _, ext = os.path.splitext(basename)
-                if ext.lower() in _SUSPICIOUS_EXTENSIONS:
-                    self.has_suspicious_ext = True
+        if key in self._seen:
+            return
+        self._seen.add(key)
+        self._events.append({"action": action, "file": basename})
+        logger.info("File event: %s %s", action, basename)
+
+        if not self.has_suspicious_ext:
+            _, ext = os.path.splitext(basename)
+            if ext.lower() in _SUSPICIOUS_EXTENSIONS:
+                self.has_suspicious_ext = True
 
     def on_created(self, event: FileSystemEvent):
         if not event.is_directory:
@@ -46,6 +49,7 @@ class _EventHandler(FileSystemEventHandler):
 
 
 class FileMonitor:
+
     def __init__(self):
         self.events: list[dict] = []
         self._observer = Observer()
@@ -54,7 +58,8 @@ class FileMonitor:
     def start(self):
         for directory in config.WATCHED_DIRS:
             if os.path.isdir(directory):
-                self._observer.schedule(self._handler, directory, recursive=False)
+                self._observer.schedule(self._handler, directory,
+                                        recursive=False)
                 logger.info("Watching directory: %s", directory)
         self._observer.start()
 
@@ -63,8 +68,7 @@ class FileMonitor:
         self._observer.join(timeout=5)
 
     def get_results(self) -> dict:
-        flagged = ["file_write"] if self._handler.has_suspicious_ext else []
         return {
-            "file_activity": self.events,
-            "flagged_functions": flagged,
+            "file_activity":     self.events,
+            "flagged_functions": ["file_write"] if self._handler.has_suspicious_ext else [],
         }

@@ -1,10 +1,8 @@
-import os
-import subprocess
-import sys
 import time
 import threading
 import logging
 
+from container import Container
 from process_monitor import ProcessMonitor, measure_baseline
 from network_monitor import NetworkMonitor
 from file_monitor import FileMonitor
@@ -12,47 +10,30 @@ import config
 
 logger = logging.getLogger("spectreflow.dynamic.analyzer")
 
-_SCRIPT_EXTENSIONS = {".py", ".pyw"}
-
 
 class DynamicAnalyzer:
-    def __init__(self, target_path: str, duration: float | None = None):
+    def __init__(self, target_path: str, duration: float = None):
         self.target_path = target_path
         self.duration = duration or config.MONITOR_DURATION
 
-    def _build_command(self) -> list[str]:
-        _, ext = os.path.splitext(self.target_path)
-        if ext.lower() in _SCRIPT_EXTENSIONS:
-            return [sys.executable, self.target_path]
-        return [self.target_path]
-
     def run(self) -> dict:
-        cmd = self._build_command()
-        is_binary = len(cmd) == 1
-
         logger.info("=" * 60)
         logger.info("SpectreFlow Dynamic Analysis")
         logger.info("Target : %s", self.target_path)
-        logger.info("Type   : %s", "binary" if is_binary else "script")
         logger.info("Duration: %ss", self.duration)
         logger.info("=" * 60)
 
         baseline_cpu = measure_baseline()
 
+        container = Container(self.target_path, timeout=self.duration)
+        container.setup()
+
         file_mon = FileMonitor()
         file_mon.start()
 
-        try:
-            proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            )
-            logger.info("Target launched — PID %d", proc.pid)
-        except Exception as exc:
-            file_mon.stop()
-            logger.error("Failed to launch target: %s", exc)
-            return self._empty_result()
-
+        proc = container.launch()
         pid = proc.pid
+
         proc_mon = ProcessMonitor(pid, baseline_cpu=baseline_cpu)
         net_mon = NetworkMonitor(pid)
 
@@ -73,11 +54,7 @@ class DynamicAnalyzer:
         for t in threads:
             t.join(timeout=5)
 
-        try:
-            proc.terminate()
-            proc.wait(timeout=5)
-        except Exception:
-            pass
+        container.teardown()
 
         return self._aggregate(proc_mon, net_mon, file_mon)
 
@@ -108,15 +85,4 @@ class DynamicAnalyzer:
             "file_activity": file_res["file_activity"],
             "cpu_spike": proc_res["cpu_spike"],
             "flagged_functions": all_flagged,
-        }
-
-    @staticmethod
-    def _empty_result() -> dict:
-        return {
-            "suspicious": False,
-            "target_location": None,
-            "network_activity": [],
-            "file_activity": [],
-            "cpu_spike": False,
-            "flagged_functions": [],
         }

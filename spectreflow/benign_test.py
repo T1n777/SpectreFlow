@@ -1,7 +1,3 @@
-"""
-A completely benign script — just does some math and prints.
-Used to verify SpectreFlow does NOT produce false positives.
-"""
 import time
 
 total = 0
