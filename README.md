@@ -31,12 +31,12 @@ SpectreFlow is a dynamic and static malware analysis engine for Windows. It moni
 1. **Clone the repository:**
     ```bash
     git clone <repository_url>
-    cd SpectreFlow
+    cd SpectreFlow/spectreflow
     ```
 
 2. **Install dependencies** (virtual environment recommended):
     ```bash
-    pip install -r requirements.txt
+    pip install -r ../requirements.txt
     ```
 
 > **Note:** `r2pipe` is only needed for static analysis (`--static` flag). It requires [radare2](https://github.com/radareorg/radare2) to be installed and on your `PATH`.
@@ -105,3 +105,4 @@ python main.py target.exe --no-gui --verbose
 - **Windows 10 / 11** (for full process & network monitoring, dark title bar)
 - **radare2** (optional — only for `--static`)
 - **All modules in requirements.txt** (installing dependencies)
+
