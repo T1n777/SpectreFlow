@@ -1,9 +1,5 @@
-# Core dependencies
-psutil
-watchdog
 matplotlib
 networkx
-
-# Optional — only needed for static analysis (--static flag)
-# Requires radare2 installed and on PATH
-# r2pipe
+r2pipe
+psutil>=5.9.0
+watchdog>=3.0.0
