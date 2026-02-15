@@ -1,3 +1,4 @@
+import os
 import ctypes
 import json
 import logging
@@ -6,42 +7,43 @@ import threading
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog
 
-BG       = "#1e1e2e"
-BG_DARK  = "#181825"
-BG_CARD  = "#313244"
-FG       = "#cdd6f4"
-FG_DIM   = "#a6adc8"
-ACCENT   = "#89b4fa"
-GREEN    = "#a6e3a1"
-RED      = "#f38ba8"
-ORANGE   = "#fab387"
-YELLOW   = "#f9e2af"
-BORDER   = "#45475a"
+import config
+
+BG = "#1e1e2e"
+BG_DARK = "#181825"
+BG_CARD = "#313244"
+FG = "#cdd6f4"
+FG_DIM = "#a6adc8"
+ACCENT = "#89b4fa"
+GREEN = "#a6e3a1"
+RED = "#f38ba8"
+ORANGE = "#fab387"
+YELLOW = "#f9e2af"
+BORDER = "#45475a"
 
 THREAT_COLORS = {"HIGH": RED, "MEDIUM": ORANGE, "LOW": GREEN}
 
-FONT      = ("Segoe UI", 10)
+FONT = ("Segoe UI", 10)
 FONT_BOLD = ("Segoe UI", 10, "bold")
-FONT_SM   = ("Segoe UI", 9)
-FONT_LG   = ("Segoe UI", 14, "bold")
-FONT_XL   = ("Segoe UI", 22, "bold")
-MONO      = ("Consolas", 9)
+FONT_SM = ("Segoe UI", 9)
+FONT_LG = ("Segoe UI", 14, "bold")
+FONT_XL = ("Segoe UI", 22, "bold")
+MONO = ("Consolas", 9)
 
 
 class QueueHandler(logging.Handler):
 
-    def __init__(self, log_queue: queue.Queue):
+    def __init__(self, log_queue):
         super().__init__()
         self.log_queue = log_queue
 
-    def emit(self, record: logging.LogRecord):
+    def emit(self, record):
         self.log_queue.put(self.format(record))
 
 
 class AnalysisApp:
 
-    def __init__(self, root: tk.Tk, target: str, duration: float,
-                 run_static: bool, run_visualize: bool, verbose: bool):
+    def __init__(self, root, target, duration, run_static, run_visualize, verbose):
         self.root = root
         self.target = target
         self.duration = duration
@@ -49,8 +51,8 @@ class AnalysisApp:
         self.run_visualize = run_visualize
         self.verbose = verbose
 
-        self.log_queue: queue.Queue = queue.Queue()
-        self.result: dict | None = None
+        self.log_queue = queue.Queue()
+        self.result = None
         self.risk_score = 0
         self.threat_level = "—"
 
@@ -69,7 +71,10 @@ class AnalysisApp:
             "%(asctime)s │ %(name)-30s │ %(message)s", datefmt="%H:%M:%S"
         ))
         root_logger = logging.getLogger()
-        root_logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
+        if self.verbose:
+            root_logger.setLevel(logging.DEBUG)
+        else:
+            root_logger.setLevel(logging.INFO)
         root_logger.addHandler(handler)
 
     def _build_ui(self):
@@ -118,9 +123,9 @@ class AnalysisApp:
         )
 
         self.log_text.tag_configure("spike", foreground=RED)
-        self.log_text.tag_configure("net",   foreground=ORANGE)
-        self.log_text.tag_configure("file",  foreground=ACCENT)
-        self.log_text.tag_configure("info",  foreground=FG_DIM)
+        self.log_text.tag_configure("net", foreground=ORANGE)
+        self.log_text.tag_configure("file", foreground=ACCENT)
+        self.log_text.tag_configure("info", foreground=FG_DIM)
 
         right = tk.Frame(body, bg=BG)
         right.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
@@ -236,7 +241,7 @@ class AnalysisApp:
         analyzer = DynamicAnalyzer(self.target, duration=self.duration)
         result = analyzer.run()
 
-        static_features: dict = {}
+        static_features = {}
         self.cfg_data = None
         if self.run_static:
             self.cfg_data = extract_cfg(self.target)
@@ -279,7 +284,7 @@ class AnalysisApp:
         for w in self.report_frame.winfo_children():
             w.destroy()
 
-        def _round_rect(canvas, x1, y1, x2, y2, r=14, **kw):
+        def round_rect(canvas, x1, y1, x2, y2, r=14, **kw):
             pts = [
                 x1+r, y1, x2-r, y1, x2, y1, x2, y1+r,
                 x2, y2-r, x2, y2, x2-r, y2, x1+r, y2,
@@ -304,20 +309,20 @@ class AnalysisApp:
 
             win = cv.create_window(0, 0, window=inner, anchor="nw")
 
-            def _resize(_event=None):
+            def resize(event=None):
                 inner.update_idletasks()
                 w = max(inner.winfo_reqwidth(), outer.winfo_width())
                 h = inner.winfo_reqheight()
                 cv.configure(width=w, height=h)
                 cv.itemconfigure(win, width=w)
                 cv.delete("bg")
-                _round_rect(cv, 0, 0, w, h, r=14,
-                            fill=BG_CARD, outline=BORDER, width=1, tags="bg")
+                round_rect(cv, 0, 0, w, h, r=14,
+                           fill=BG_CARD, outline=BORDER, width=1, tags="bg")
                 cv.tag_lower("bg")
 
-            inner.bind("<Configure>", _resize)
-            outer.bind("<Configure>", _resize)
-            outer.after(50, _resize)
+            inner.bind("<Configure>", resize)
+            outer.bind("<Configure>", resize)
+            outer.after(50, resize)
             return outer
 
         def risk_card(body):
@@ -336,7 +341,8 @@ class AnalysisApp:
         card(self.report_frame, "🎯 Risk Score", risk_card)
 
         def target_card(body):
-            tk.Label(body, text=result.get("target_location") or "Unknown",
+            location = result.get("target_location") or "Unknown"
+            tk.Label(body, text=location,
                      font=MONO, fg=FG, bg=BG_CARD, anchor=tk.W,
                      wraplength=350).pack(anchor=tk.W)
 
@@ -344,19 +350,28 @@ class AnalysisApp:
 
         def indicators_card(body):
             indicators = [
-                ("CPU Spike",         result.get("cpu_spike", False)),
-                ("Network Activity",  bool(result.get("network_activity"))),
-                ("File Activity",     bool(result.get("file_activity"))),
+                ("CPU Spike", result.get("cpu_spike", False)),
+                ("Network Activity", bool(result.get("network_activity"))),
+                ("File Activity", bool(result.get("file_activity"))),
                 ("Flagged Functions", bool(result.get("flagged_functions"))),
             ]
             for name, active in indicators:
                 row = tk.Frame(body, bg=BG_CARD)
                 row.pack(fill=tk.X, pady=1)
-                dot, dot_color = ("●", RED) if active else ("○", FG_DIM)
+                if active:
+                    dot = "●"
+                    dot_color = RED
+                else:
+                    dot = "○"
+                    dot_color = FG_DIM
                 tk.Label(row, text=dot, font=FONT, fg=dot_color,
                          bg=BG_CARD, width=2).pack(side=tk.LEFT)
+                if active:
+                    text_color = FG
+                else:
+                    text_color = FG_DIM
                 tk.Label(row, text=name, font=FONT,
-                         fg=FG if active else FG_DIM,
+                         fg=text_color,
                          bg=BG_CARD, anchor=tk.W).pack(side=tk.LEFT)
 
         card(self.report_frame, "🔍 Indicators", indicators_card)
@@ -382,10 +397,14 @@ class AnalysisApp:
             def file_card(body):
                 for ev in files:
                     fname = ev.get("file", "?")
-                    color = ORANGE if fname.rsplit(".", 1)[-1].lower() in (
-                        "exe", "dll", "bat", "cmd") else FG_DIM
-                    tk.Label(body, text=f"{ev.get('action', '?')}: {fname}",
-                             font=MONO, fg=color, bg=BG_CARD,
+                    _, ext = os.path.splitext(fname)
+                    if ext.lower() in config.SUSPICIOUS_EXTENSIONS:
+                        text_color = ORANGE
+                    else:
+                        text_color = FG_DIM
+                    action = ev.get("action", "?")
+                    tk.Label(body, text=f"{action}: {fname}",
+                             font=MONO, fg=text_color, bg=BG_CARD,
                              anchor=tk.W).pack(anchor=tk.W, pady=1)
             card(self.report_frame, f"📄 File Activity ({len(files)})", file_card)
 
@@ -394,10 +413,12 @@ class AnalysisApp:
 
         report_info = {"risk_score": self.risk_score,
                        "threat_level": self.threat_level}
-        data = (self.cfg_data
-                if hasattr(self, "cfg_data") and self.cfg_data
-                   and self.cfg_data.get("nodes")
-                else build_dynamic_graph_data(self.result))
+
+        if hasattr(self, "cfg_data") and self.cfg_data and self.cfg_data.get("nodes"):
+            data = self.cfg_data
+        else:
+            data = build_dynamic_graph_data(self.result)
+
         threading.Thread(
             target=lambda: launch_vis(data=data, report_info=report_info),
             daemon=True,
@@ -415,7 +436,7 @@ class AnalysisApp:
             self.bottom_status.configure(text=f"Report saved to {path}")
 
 
-def _set_dark_title_bar(root: tk.Tk) -> None:
+def _set_dark_title_bar(root):
     root.update_idletasks()
     try:
         hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
