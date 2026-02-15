@@ -237,6 +237,8 @@ class AnalysisApp:
         from analyzer import DynamicAnalyzer
         from static_analysis import extract_cfg, compute_static_metrics
         from risk_engine import calculate_risk, classify
+        from pe_analysis import analyze_pe
+        from hash_lookup import check_hash
 
         analyzer = DynamicAnalyzer(self.target, duration=self.duration)
         result = analyzer.run()
@@ -248,7 +250,16 @@ class AnalysisApp:
             static_features = compute_static_metrics(self.cfg_data)
             result["static_analysis"] = static_features
 
-        risk_score = calculate_risk(result, static_features)
+        self.pe_result = analyze_pe(self.target)
+        if self.pe_result:
+            result["pe_analysis"] = self.pe_result
+
+        self.hash_result = check_hash(self.target)
+        result["hash_lookup"] = self.hash_result
+
+        risk_score = calculate_risk(result, static_features,
+                                    pe_result=self.pe_result,
+                                    hash_result=self.hash_result)
         threat_level = classify(risk_score)
         result["risk_score"] = risk_score
         result["threat_level"] = threat_level
@@ -271,7 +282,7 @@ class AnalysisApp:
             self.status_label.configure(text="✔ CLEAN", fg=GREEN)
 
         self.risk_badge.configure(
-            text=f"  {self.threat_level}  ─  {self.risk_score}/32  ",
+            text=f"  {self.threat_level}  ─  {self.risk_score}/50  ",
             bg=color, fg=BG_DARK,
         )
 
@@ -327,14 +338,14 @@ class AnalysisApp:
 
         def risk_card(body):
             score_color = THREAT_COLORS.get(self.threat_level, FG)
-            tk.Label(body, text=f"{self.risk_score}/32", font=FONT_XL,
+            tk.Label(body, text=f"{self.risk_score}/50", font=FONT_XL,
                      fg=score_color, bg=BG_CARD).pack(side=tk.LEFT, padx=(0, 12))
             info = tk.Frame(body, bg=BG_CARD)
             info.pack(side=tk.LEFT, fill=tk.X)
             tk.Label(info, text=self.threat_level + " RISK",
                      font=FONT_BOLD, fg=score_color, bg=BG_CARD,
                      anchor=tk.W).pack(anchor=tk.W)
-            tk.Label(info, text="Composite score from dynamic + static signals",
+            tk.Label(info, text="Composite score from dynamic + static + PE analysis",
                      font=FONT_SM, fg=FG_DIM, bg=BG_CARD,
                      anchor=tk.W).pack(anchor=tk.W)
 
@@ -349,11 +360,19 @@ class AnalysisApp:
         card(self.report_frame, "📁 Target", target_card)
 
         def indicators_card(body):
+            pe = getattr(self, "pe_result", None)
+            hr = getattr(self, "hash_result", None)
             indicators = [
                 ("CPU Spike", result.get("cpu_spike", False)),
-                ("Network Activity", bool(result.get("network_activity"))),
-                ("File Activity", bool(result.get("file_activity"))),
+                ("Suspicious Connections", bool(result.get("suspicious_connections"))),
+                ("Suspicious File Write", result.get("suspicious_file_write", False)),
+                ("Sensitive Dir Write", result.get("sensitive_dir_write", False)),
                 ("Flagged Functions", bool(result.get("flagged_functions"))),
+                ("Known Malware", bool(hr and hr.get("known_malware"))),
+                ("Packed Binary", bool(pe and any(
+                    "Packed" in f["indicator"] for f in pe.get("findings", [])))),
+                ("Suspicious APIs", bool(pe and pe.get("suspicious_imports"))),
+                ("Unsigned Binary", bool(pe and not pe.get("signed"))),
             ]
             for name, active in indicators:
                 row = tk.Frame(body, bg=BG_CARD)
@@ -407,6 +426,70 @@ class AnalysisApp:
                              font=MONO, fg=text_color, bg=BG_CARD,
                              anchor=tk.W).pack(anchor=tk.W, pady=1)
             card(self.report_frame, f"📄 File Activity ({len(files)})", file_card)
+
+        hr = getattr(self, "hash_result", None)
+        if hr:
+            def hash_card(body):
+                if hr.get("known_malware"):
+                    tk.Label(body, text="⚠ KNOWN MALWARE", font=FONT_BOLD,
+                             fg=RED, bg=BG_CARD, anchor=tk.W).pack(anchor=tk.W)
+                    tk.Label(body, text=f"Family: {hr.get('malware_family', '?')}",
+                             font=MONO, fg=RED, bg=BG_CARD,
+                             anchor=tk.W).pack(anchor=tk.W, pady=1)
+                    tags = hr.get("tags", [])
+                    if tags:
+                        tk.Label(body, text=f"Tags: {', '.join(tags)}",
+                                 font=MONO, fg=ORANGE, bg=BG_CARD,
+                                 anchor=tk.W).pack(anchor=tk.W, pady=1)
+                    tk.Label(body, text=f"First seen: {hr.get('first_seen', '?')}",
+                             font=MONO, fg=FG_DIM, bg=BG_CARD,
+                             anchor=tk.W).pack(anchor=tk.W, pady=1)
+                else:
+                    tk.Label(body, text="✔ Not found in malware databases",
+                             font=FONT, fg=GREEN, bg=BG_CARD,
+                             anchor=tk.W).pack(anchor=tk.W)
+                    if hr.get("error"):
+                        tk.Label(body, text=f"Note: {hr['error']}",
+                                 font=FONT_SM, fg=FG_DIM, bg=BG_CARD,
+                                 anchor=tk.W).pack(anchor=tk.W)
+                tk.Label(body, text=f"SHA-256: {hr.get('sha256', '?')}",
+                         font=MONO, fg=FG_DIM, bg=BG_CARD,
+                         anchor=tk.W, wraplength=350).pack(anchor=tk.W, pady=(4, 0))
+            card(self.report_frame, "🔎 Threat Intelligence", hash_card)
+
+        pe = getattr(self, "pe_result", None)
+        if pe:
+            findings = pe.get("findings", [])
+            if findings:
+                def pe_card(body):
+                    sev_colors = {"critical": RED, "high": ORANGE,
+                                  "medium": YELLOW, "low": FG_DIM}
+                    for f in findings:
+                        sev = f.get("severity", "medium")
+                        color = sev_colors.get(sev, FG_DIM)
+                        tk.Label(body,
+                                 text=f"[{sev.upper()}] {f['indicator']}",
+                                 font=MONO, fg=color, bg=BG_CARD,
+                                 anchor=tk.W, wraplength=350).pack(anchor=tk.W, pady=1)
+                        tk.Label(body, text=f"  → {f.get('detail', '')}",
+                                 font=FONT_SM, fg=FG_DIM, bg=BG_CARD,
+                                 anchor=tk.W, wraplength=350).pack(anchor=tk.W)
+                card(self.report_frame,
+                     f"🔒 Binary Analysis ({len(findings)} findings)", pe_card)
+
+            sus_imports = pe.get("suspicious_imports", [])
+            if sus_imports:
+                def api_card(body):
+                    for imp in sus_imports:
+                        tk.Label(body,
+                                 text=f"⚡ {imp['api']}  ({imp['dll']})",
+                                 font=MONO, fg=RED, bg=BG_CARD,
+                                 anchor=tk.W).pack(anchor=tk.W, pady=1)
+                        tk.Label(body, text=f"  → {imp['reason']}",
+                                 font=FONT_SM, fg=FG_DIM, bg=BG_CARD,
+                                 anchor=tk.W, wraplength=350).pack(anchor=tk.W)
+                card(self.report_frame,
+                     f"🛡 Suspicious APIs ({len(sus_imports)})", api_card)
 
     def _open_graph(self):
         from graph_visualizer import launch as launch_vis, build_dynamic_graph_data

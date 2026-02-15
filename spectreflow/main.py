@@ -9,6 +9,8 @@ from tkinter import filedialog, font as tkfont
 from analyzer import DynamicAnalyzer
 from static_analysis import extract_cfg, compute_static_metrics
 from risk_engine import calculate_risk, classify
+from pe_analysis import analyze_pe
+from hash_lookup import check_hash
 from graph_visualizer import launch as launch_visualizer, build_dynamic_graph_data
 from report_gui import launch_gui
 
@@ -173,7 +175,16 @@ def main():
         static_features = compute_static_metrics(cfg_data)
         result["static_analysis"] = static_features
 
-    risk_score = calculate_risk(result, static_features)
+    pe_result = analyze_pe(args.target)
+    if pe_result:
+        result["pe_analysis"] = pe_result
+
+    hash_result = check_hash(args.target)
+    result["hash_lookup"] = hash_result
+
+    risk_score = calculate_risk(result, static_features,
+                                pe_result=pe_result,
+                                hash_result=hash_result)
     threat_level = classify(risk_score)
     result["risk_score"] = risk_score
     result["threat_level"] = threat_level

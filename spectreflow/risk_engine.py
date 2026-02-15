@@ -1,8 +1,11 @@
-MAX_RISK_SCORE = 32
+MAX_RISK_SCORE = 50
 
 
-def calculate_risk(dynamic_result, static_features):
+def calculate_risk(dynamic_result, static_features, pe_result=None, hash_result=None):
     score = 0
+
+    if hash_result and hash_result.get("known_malware"):
+        score += 10
 
     if dynamic_result.get("cpu_spike"):
         score += 4
@@ -35,12 +38,28 @@ def calculate_risk(dynamic_result, static_features):
     if static_features.get("suspicious_density", 0) > 0.1:
         score += 4
 
+    if pe_result:
+        if not pe_result.get("signed"):
+            score += 1
+
+        for finding in pe_result.get("findings", []):
+            sev = finding.get("severity", "")
+            if sev == "critical":
+                score += 4
+            elif sev == "high":
+                score += 3
+            elif sev == "medium":
+                score += 1
+
+        api_count = len(pe_result.get("suspicious_imports", []))
+        score += min(api_count * 2, 6)
+
     return min(score, MAX_RISK_SCORE)
 
 
 def classify(score):
-    if score >= 12:
+    if score >= 18:
         return "HIGH"
-    if score >= 6:
+    if score >= 8:
         return "MEDIUM"
     return "LOW"
