@@ -1,5 +1,9 @@
+psutil
+docker
+watchdog
 matplotlib
 networkx
+requests
+pefile
 r2pipe
-psutil>=5.9.0
-watchdog>=3.0.0
+# yara-python
