@@ -8,6 +8,7 @@ import config
 logger = logging.getLogger("spectreflow.dynamic.file")
 
 _SUSPICIOUS_EXTENSIONS = config.SUSPICIOUS_EXTENSIONS
+_SENSITIVE_DIRS = config.SENSITIVE_DIRS
 
 
 class _EventHandler(FileSystemEventHandler):
@@ -17,6 +18,7 @@ class _EventHandler(FileSystemEventHandler):
         self._events = events
         self._seen: set[tuple] = set()
         self.has_suspicious_ext = False
+        self.has_sensitive_write = False
 
     def _record(self, action: str, path: str):
         basename = os.path.basename(path)
@@ -31,6 +33,14 @@ class _EventHandler(FileSystemEventHandler):
             _, ext = os.path.splitext(basename)
             if ext.lower() in _SUSPICIOUS_EXTENSIONS:
                 self.has_suspicious_ext = True
+
+        if not self.has_sensitive_write and action in ("created", "modified"):
+            parent = os.path.dirname(os.path.abspath(path))
+            for sensitive in _SENSITIVE_DIRS:
+                if parent.lower().startswith(sensitive.lower()):
+                    self.has_sensitive_write = True
+                    logger.info("Sensitive directory write: %s", path)
+                    break
 
     def on_created(self, event: FileSystemEvent):
         if not event.is_directory:
@@ -68,7 +78,12 @@ class FileMonitor:
         self._observer.join(timeout=5)
 
     def get_results(self) -> dict:
+        flagged = []
+        if self._handler.has_suspicious_ext:
+            flagged.append("file_write")
         return {
-            "file_activity":     self.events,
-            "flagged_functions": ["file_write"] if self._handler.has_suspicious_ext else [],
+            "file_activity": self.events,
+            "suspicious_file_write": self._handler.has_suspicious_ext,
+            "sensitive_dir_write": self._handler.has_sensitive_write,
+            "flagged_functions": flagged,
         }

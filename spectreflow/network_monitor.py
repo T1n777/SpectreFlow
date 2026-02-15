@@ -13,8 +13,18 @@ class NetworkMonitor:
     def __init__(self, pid: int):
         self.pid = pid
         self.connections: list[str] = []
+        self.suspicious_connections: list[str] = []
         self._seen: set[tuple] = set()
         self._stop = threading.Event()
+
+    def _classify(self, ip: str, port: int) -> bool:
+        if ip in config.BENIGN_HOSTS:
+            return False
+        if port in config.SUSPICIOUS_PORTS:
+            return True
+        if port not in config.BENIGN_PORTS:
+            return True
+        return False
 
     def start(self, duration: float | None = None):
         duration = duration or config.MONITOR_DURATION
@@ -36,7 +46,11 @@ class NetworkMonitor:
                                     self._seen.add(endpoint)
                                     entry = f"{conn.raddr.ip}:{conn.raddr.port}"
                                     self.connections.append(entry)
-                                    logger.info("Network connection: %s", entry)
+                                    if self._classify(conn.raddr.ip, conn.raddr.port):
+                                        self.suspicious_connections.append(entry)
+                                        logger.info("Suspicious connection: %s", entry)
+                                    else:
+                                        logger.info("Benign connection: %s", entry)
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
             except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -51,6 +65,7 @@ class NetworkMonitor:
 
     def get_results(self) -> dict:
         return {
-            "network_activity":  self.connections,
-            "flagged_functions": ["network_call"] if self.connections else [],
+            "network_activity": self.connections,
+            "suspicious_connections": self.suspicious_connections,
+            "flagged_functions": ["network_call"] if self.suspicious_connections else [],
         }

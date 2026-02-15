@@ -7,8 +7,9 @@ POLL_INTERVAL        = 0.5
 
 CPU_BASELINE_WINDOW  = 3
 CPU_BASELINE_SAMPLES = 6
-CPU_SPIKE_DELTA      = 15.0
-CPU_PROCESS_HARD_LIMIT = 70.0
+CPU_SPIKE_DELTA      = 25.0
+CPU_PROCESS_HARD_LIMIT = 85.0
+CPU_SPIKE_MIN_COUNT  = 3
 
 WATCHED_DIRS = [
     tempfile.gettempdir(),
@@ -27,4 +28,12 @@ FLAGGED_FUNCTIONS = [
     "keylog", "screen_capture", "dll_inject",
 ]
 
-SUSPICIOUS_PORTS = {4444, 5555, 1337, 31337, 8080, 9090}
+SUSPICIOUS_PORTS = {4444, 5555, 1337, 31337, 9090, 6666, 6667, 3389, 5900}
+BENIGN_PORTS     = {80, 443, 53, 123, 993, 587, 25, 110, 143}
+BENIGN_HOSTS     = {"127.0.0.1", "::1", "0.0.0.0", "localhost"}
+
+SENSITIVE_DIRS = {
+    os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32"),
+    os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "SysWOW64"),
+    os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup"),
+}

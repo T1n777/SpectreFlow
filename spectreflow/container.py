@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import logging
 
+import psutil
 import config
 
 logger = logging.getLogger("spectreflow.container")
@@ -51,12 +52,19 @@ class Container:
     def kill(self):
         if not self.process:
             return
+        pid = self.process.pid
         try:
-            self.process.kill()
-            self.process.wait(timeout=5)
-            logger.info("Target process killed (PID %d)", self.process.pid)
-        except OSError:
-            pass
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                logger.info("Killing child process: %s (PID %d)", child.name(), child.pid)
+                child.kill()
+            psutil.wait_procs(children, timeout=5)
+            parent.kill()
+            parent.wait(timeout=5)
+            logger.info("Target process tree killed (root PID %d, %d children)", pid, len(children))
+        except psutil.NoSuchProcess:
+            logger.info("Process %d already exited", pid)
 
     def teardown(self):
         self.kill()

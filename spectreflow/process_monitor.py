@@ -38,10 +38,12 @@ class ProcessMonitor:
         self._children_seen: set[str] = set()
         self._stop = threading.Event()
         self.target_location: str | None = None
+        self._consecutive_spikes = 0
+        self._spike_min = config.CPU_SPIKE_MIN_COUNT
 
         logger.info(
-            "Adaptive threshold: %.1f%% (baseline %.1f%% + delta %.1f%%)",
-            self.spike_threshold, baseline_cpu, config.CPU_SPIKE_DELTA,
+            "Adaptive threshold: %.1f%% (baseline %.1f%% + delta %.1f%%, need %d consecutive)",
+            self.spike_threshold, baseline_cpu, config.CPU_SPIKE_DELTA, self._spike_min,
         )
 
     def start(self, duration: float | None = None):
@@ -65,20 +67,21 @@ class ProcessMonitor:
                 self.max_cpu = max(self.max_cpu, system_cpu)
 
                 if not self.cpu_spike_detected:
-                    if system_cpu >= self.spike_threshold:
-                        logger.info(
-                            "CPU SPIKE (system): %.1f%% exceeds adaptive "
-                            "threshold %.1f%% (baseline was %.1f%%)",
-                            system_cpu, self.spike_threshold, self.baseline_cpu,
-                        )
-                        self.cpu_spike_detected = True
-                    elif process_cpu >= config.CPU_PROCESS_HARD_LIMIT:
-                        logger.info(
-                            "CPU SPIKE (process): target using %.1f%% "
-                            "(hard limit %s%%)",
-                            process_cpu, config.CPU_PROCESS_HARD_LIMIT,
-                        )
-                        self.cpu_spike_detected = True
+                    is_spiking = (
+                        system_cpu >= self.spike_threshold
+                        or process_cpu >= config.CPU_PROCESS_HARD_LIMIT
+                    )
+                    if is_spiking:
+                        self._consecutive_spikes += 1
+                        if self._consecutive_spikes >= self._spike_min:
+                            logger.info(
+                                "CPU SPIKE confirmed: %.1f%% system / %.1f%% process "
+                                "(%d consecutive readings above threshold)",
+                                system_cpu, process_cpu, self._consecutive_spikes,
+                            )
+                            self.cpu_spike_detected = True
+                    else:
+                        self._consecutive_spikes = 0
 
                 for child in proc.children(recursive=True):
                     name = child.name()

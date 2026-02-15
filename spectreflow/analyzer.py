@@ -74,7 +74,9 @@ class DynamicAnalyzer:
 
         suspicious = bool(
             proc_res["cpu_spike"]
-            or net_res["network_activity"]
+            or net_res.get("suspicious_connections")
+            or file_res.get("suspicious_file_write")
+            or file_res.get("sensitive_dir_write")
             or all_flagged
         )
 
@@ -82,7 +84,11 @@ class DynamicAnalyzer:
             "suspicious": suspicious,
             "target_location": proc_res.get("target_location"),
             "network_activity": net_res["network_activity"],
+            "suspicious_connections": net_res.get("suspicious_connections", []),
             "file_activity": file_res["file_activity"],
+            "suspicious_file_write": file_res.get("suspicious_file_write", False),
+            "sensitive_dir_write": file_res.get("sensitive_dir_write", False),
             "cpu_spike": proc_res["cpu_spike"],
             "flagged_functions": all_flagged,
         }
+
