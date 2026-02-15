@@ -1,6 +1,7 @@
 import r2pipe
 
 
+<<<<<<< HEAD
 def extract_cfg(binary_path):
     # open the binary in radare2 and analyze it
     r2 = r2pipe.open(binary_path)
@@ -8,6 +9,14 @@ def extract_cfg(binary_path):
     functions = r2.cmdj("aflj")
 
     # find the main function address
+=======
+def extract_cfg(binary_path: str):
+
+    r2 = r2pipe.open(binary_path)
+    r2.cmd("aaa")
+    functions = r2.cmdj("aflj")
+# runs aaa to analyse everything followed by listing all functions
+>>>>>>> 09c3d52367c2e9d3defc12b8090c83963e82f317
     main_addr = None
     for f in functions:
         if f["name"] == "main":
@@ -21,10 +30,15 @@ def extract_cfg(binary_path):
     # extract the control flow graph
     cfg = r2.cmdj(f"agfj @ {main_addr}")
     r2.quit()
+<<<<<<< HEAD
 
     # build lists of nodes and edges from the cfg blocks
     nodes = []
     edges = []
+=======
+# make the cfg - control flow graph
+    nodes, edges = [], []
+>>>>>>> 09c3d52367c2e9d3defc12b8090c83963e82f317
     if cfg:
         for block in cfg[0].get("blocks", []):
             nodes.append(block["offset"])
@@ -32,10 +46,10 @@ def extract_cfg(binary_path):
                 edges.append((block["offset"], block["jump"]))
             if "fail" in block:
                 edges.append((block["offset"], block["fail"]))
-
+# get all blocks from cfg, find all nodes(the simple blocks) and edges(the jumps and fails b/w blocks)
     return {"nodes": nodes, "edges": edges}
 
-
+#providing additional data required for risk engine
 def compute_static_metrics(cfg):
     # count nodes and edges
     node_count = len(cfg["nodes"])
