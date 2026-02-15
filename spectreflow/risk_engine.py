@@ -1,4 +1,7 @@
-def calculate_risk(dynamic_result: dict, static_features: dict) -> int:
+MAX_RISK_SCORE = 32
+
+
+def calculate_risk(dynamic_result, static_features):
     score = 0
 
     if dynamic_result.get("cpu_spike"):
@@ -7,7 +10,9 @@ def calculate_risk(dynamic_result: dict, static_features: dict) -> int:
         score += 4
     if dynamic_result.get("file_activity"):
         score += 2
-    score += len(dynamic_result.get("flagged_functions", [])) * 2
+
+    flagged = dynamic_result.get("flagged_functions", [])
+    score += len(flagged) * 2
 
     if static_features.get("complexity", 0) > 20:
         score += 2
@@ -18,12 +23,12 @@ def calculate_risk(dynamic_result: dict, static_features: dict) -> int:
     if static_features.get("suspicious_density", 0) > 0.1:
         score += 4
 
-    return score
+    return min(score, MAX_RISK_SCORE)
 
 
-def classify(score: int) -> str:
+def classify(score):
     if score >= 10:
         return "HIGH"
-    elif score >= 5:
+    if score >= 5:
         return "MEDIUM"
     return "LOW"

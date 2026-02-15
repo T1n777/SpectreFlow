@@ -1,34 +1,32 @@
-try:
-    import r2pipe
-    _HAS_R2PIPE = True
-except ImportError:
-    _HAS_R2PIPE = False
+import r2pipe
 
 
-def extract_cfg(binary_path: str):
-    if not _HAS_R2PIPE:
-        print("[!] r2pipe not installed — skipping static analysis.")
-        return {"nodes": [], "edges": []}
-
+def extract_cfg(binary_path):
+    # open the binary in radare2 and analyze it
     r2 = r2pipe.open(binary_path)
     r2.cmd("aaa")
     functions = r2.cmdj("aflj")
 
+    # find the main function address
     main_addr = None
     for f in functions:
         if f["name"] == "main":
             main_addr = f["offset"]
             break
+
+    # if no main found, just use the first function
     if not main_addr:
         main_addr = functions[0]["offset"]
 
+    # extract the control flow graph
     cfg = r2.cmdj(f"agfj @ {main_addr}")
     r2.quit()
 
-    nodes, edges = [], []
+    # build lists of nodes and edges from the cfg blocks
+    nodes = []
+    edges = []
     if cfg:
-        blocks = cfg[0].get("blocks", [])
-        for block in blocks:
+        for block in cfg[0].get("blocks", []):
             nodes.append(block["offset"])
             if "jump" in block:
                 edges.append((block["offset"], block["jump"]))
@@ -39,14 +37,24 @@ def extract_cfg(binary_path: str):
 
 
 def compute_static_metrics(cfg):
-    nodes = cfg["nodes"]
-    edges = cfg["edges"]
-    node_count = len(nodes)
-    edge_count = len(edges)
+    # count nodes and edges
+    node_count = len(cfg["nodes"])
+    edge_count = len(cfg["edges"])
 
+    # cyclomatic complexity = edges - nodes + 2
     complexity = edge_count - node_count + 2
-    branch_factor = edge_count / node_count if node_count else 0
-    loop_count = len([e for e in edges if e[0] == e[1]])
+
+    # average edges per node
+    if node_count > 0:
+        branch_factor = edge_count / node_count
+    else:
+        branch_factor = 0
+
+    # count self-loops (a block that jumps to itself)
+    loop_count = 0
+    for src, dst in cfg["edges"]:
+        if src == dst:
+            loop_count += 1
 
     return {
         "complexity": complexity,
