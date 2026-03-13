@@ -19,6 +19,8 @@
 
 SpectreFlow is a comprehensive malware analysis tool that combines **static analysis**, **dynamic monitoring**, and **threat intelligence** to detect malicious behavior in executable files and scripts.
 
+> **Built for [GENESYS 2.0](https://clubs.pes.edu/gronit/)** — a 24-hour state-level hackathon organized by **[GronIT - The Green Computing Club](https://clubs.pes.edu/gronit/)** under the Department of CSE, PES University (RR Campus). The hackathon challenges teams to tackle sustainability and security problems with practical solutions spanning **Cybersecurity, Gen AI, AR-VR, and open innovation**, supported by expert mentorship throughout.
+
 ## 🚀 Key Features
 
 ### 🔍 Static Analysis
@@ -116,4 +118,25 @@ python main.py path/to/malware.exe --no-gui
 - **`graph_visualizer.py`**: Matplotlib/NetworkX graph visualization.
 - **`container.py`**: Manages Docker and local sandboxes.
 
+---
 
+## 🏆 Hackathon
+
+This project was built for **GENESYS 2.0**, the second edition of the flagship hackathon by **GronIT - The Green Computing Club** at PES University.
+
+| Detail | Info |
+| :--- | :--- |
+| **Event** | GENESYS 2.0 |
+| **Organizer** | [GronIT - The Green Computing Club](https://clubs.pes.edu/gronit/) |
+| **Department** | Computer Science, PES University |
+| **Campus** | PESU RR Campus, Bengaluru |
+| **Format** | 24-hour state-level hackathon |
+| **Domains** | Cybersecurity, Gen AI, AR-VR, Open Innovation |
+| **Instagram** | [@gronit_pes](https://www.instagram.com/gronit_pes/) |
+
+## 👥 Authors
+
+- Yatin R
+- Virag Minche
+- Yaduveer Pavan
+- Yashwanth Karthik
